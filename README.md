@@ -2,7 +2,7 @@
 
 **AI-powered correlation of network-layer and blockchain-layer data to surface investigative leads from Bitcoin transaction traffic.**
 
-Built for **SIH 2026 · SIH26146**, sponsored by the **National Technical Research Organisation (NTRO)** (Theme: Blockchain & Cybersecurity).
+Built for **SIH 2026 · SIH26146**, sponsored by the **National Technical Research Organisation (NTRO)** (Theme: Transportation & Logistics / Smart Automation).
 
 ---
 
@@ -24,7 +24,7 @@ Bitcoin's pseudonymous, peer-to-peer design lets illicit funds move, layer, and 
 4. **Explains** every flag in plain language: *"fed a transaction that split into 10 outputs — peeling-chain pattern"*, not just a bare confidence number.
 5. **Visualizes** the result as a link-analysis graph.
 
-## Proof it runs, not just that it's written
+## Nothing fancy. Just written code, proof exists.
 
 Tested end-to-end against a synthetic sample with two deliberately planted patterns — a 10-way peeling chain and a wallet whose funds crossed 3 countries in under an hour — specifically so the detector's output could be checked against a known right answer before trusting it on anything real:
 
@@ -37,7 +37,7 @@ Tested end-to-end against a synthetic sample with two deliberately planted patte
 ![entity graph](assets/entity_graph_demo.png)
 *Red = flagged wallets, blue = wallets, green = IPs, grey = transactions.*
 
-### First generation bug worth noting
+### First-generation bug, worth noting
 
 The first version of the fan-out feature measured a wallet's own out-degree in the graph — which turned out to be the wrong thing. A peeling chain is a property of the *transaction* (one input splitting into many new outputs), not an edge count on the input wallet itself. Caught this by checking the planted peeling-chain wallet against the output and seeing it wasn't flagged for the right reason. Fixed as a separate `max_tx_output_fanout` feature, re-ran, confirmed. Left in the README instead of quietly fixing it, because catching your own feature's blind spot before deployment is the actual skill, not writing the feature in the first place.
 
