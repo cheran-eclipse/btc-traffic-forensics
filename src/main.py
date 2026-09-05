@@ -93,6 +93,128 @@ def build_graph(df: pd.DataFrame) -> nx.MultiDiGraph:
 # 3. Feature extraction per wallet (this is what the AI/ML model sees)
 # ---------------------------------------------------------------------------
 
+def build_wallet_transfer_graph(df: pd.DataFrame) -> nx.DiGraph:
+    """Wallet -> wallet projection: an edge a->b for every transaction where a
+    was an input and b was an output, carrying the list of transfer timestamps.
+
+    The main graph (build_graph) routes every wallet-to-wallet flow *through* a
+    tx node, so the per-wallet features below only ever see a wallet's immediate
+    neighbours. Multi-hop questions -- "do these funds come back to where they
+    started?", "how long is the chain of pass-through wallets?" -- need this
+    flattened view where wallet reachability is a direct path.
+    """
+    wt = nx.DiGraph()
+    for _, row in df.iterrows():
+        ts = row["timestamp"]
+        for a in row["input_addresses"]:
+            for b in row["output_addresses"]:
+                if a == b:
+                    continue
+                if wt.has_edge(a, b):
+                    wt[a][b]["timestamps"].append(ts)
+                else:
+                    wt.add_edge(a, b, timestamps=[ts])
+    return wt
+
+
+def min_return_cycle_hops(wt: nx.DiGraph, wallet: str, max_hops: int = 12) -> int:
+    """Fewest wallet-hops for value leaving `wallet` to arrive back at `wallet`;
+    0 if it never returns within `max_hops`.
+
+    Why the old features can't see this: fan_in / fan_out / num_tx_touched are
+    all counts of a wallet's *own* edges. A circular flow (A->B->C->A) is a
+    property of a directed path several hops away, not of any single wallet's
+    degree -- every wallet in the ring looks locally ordinary.
+    """
+    if wallet not in wt:
+        return 0
+    frontier = {wallet}
+    seen = {wallet}
+    for hop in range(1, max_hops + 1):
+        nxt = set()
+        for u in frontier:
+            for v in wt.successors(u):
+                if v == wallet:
+                    return hop
+                if v not in seen:
+                    seen.add(v)
+                    nxt.add(v)
+        if not nxt:
+            break
+        frontier = nxt
+    return 0
+
+
+def linear_chain_length(wt: nx.DiGraph, wallet: str, max_len: int = 40) -> int:
+    """Length (in wallets) of the maximal 'pass-through' chain running through
+    `wallet` -- the run of consecutive wallets each of which has at most one
+    inbound and one outbound wallet counterpart in the whole dataset.
+
+    Why the old features can't see this: layering is a *long* obfuscation chain
+    A->B->C->...->J. Each hop wallet has fan_in == fan_out == 1, which reads as
+    perfectly normal locally. The chain is only visible by walking it; depth is
+    not any single wallet's attribute.
+    """
+    if wallet not in wt:
+        return 0
+
+    def chainable(n: str) -> bool:
+        return wt.in_degree(n) <= 1 and wt.out_degree(n) <= 1
+
+    if not chainable(wallet):
+        return 0
+
+    length = 1
+    # walk backward
+    cur = wallet
+    steps = 0
+    while steps < max_len:
+        preds = list(wt.predecessors(cur))
+        if len(preds) != 1 or not chainable(preds[0]) or preds[0] == wallet:
+            break
+        cur = preds[0]
+        length += 1
+        steps += 1
+    # walk forward
+    cur = wallet
+    steps = 0
+    while steps < max_len:
+        succs = list(wt.successors(cur))
+        if len(succs) != 1 or not chainable(succs[0]) or succs[0] == wallet:
+            break
+        cur = succs[0]
+        length += 1
+        steps += 1
+    return length
+
+
+def min_receive_to_forward_minutes(df: pd.DataFrame, wallet: str) -> float:
+    """Smallest gap between `wallet` receiving value and then sending value on.
+    Capped at 1440 (24 h); also returns 1440 if the wallet never both receives
+    and later sends. Above a day the exact hold time doesn't matter -- it just
+    isn't "rapid" -- and an uncapped sentinel would wreck feature scaling.
+
+    Why the old features can't see this: time_span_minutes is the span between a
+    wallet's first and last activity. Rapid movement is about *hold time* -- a
+    mule wallet that receives and forwards within a minute -- which a total-span
+    figure actively hides (it looks the same as a wallet used twice a month
+    apart).
+    """
+    received, sent = [], []
+    for _, row in df.iterrows():
+        if wallet in row["output_addresses"]:
+            received.append(row["timestamp"])
+        if wallet in row["input_addresses"]:
+            sent.append(row["timestamp"])
+    best = None
+    for r in received:
+        for s in sent:
+            if s >= r:
+                gap = (s - r).total_seconds() / 60.0
+                best = gap if best is None else min(best, gap)
+    return min(float(best), 1440.0) if best is not None else 1440.0
+
+
 def compute_wallet_features(df: pd.DataFrame, g: nx.MultiDiGraph) -> pd.DataFrame:
     """
     NOTE on fan_out: a wallet's own out-degree in this graph only counts how
@@ -105,9 +227,18 @@ def compute_wallet_features(df: pd.DataFrame, g: nx.MultiDiGraph) -> pd.DataFram
     same discipline as the rest of this project: verify against a known
     case, don't assume the first version of a feature is measuring what its
     name says it measures.
+
+    Night 2: three multi-hop features were added (min_return_cycle_hops,
+    linear_chain_length, min_receive_to_forward_minutes). They are new columns;
+    the existing columns are unchanged. FEATURE_COLS was extended to include
+    them, so the Isolation Forest now sees an 8-dimensional feature vector
+    instead of 6 -- this is deliberate: the Night-1 diagnostic showed
+    circular_flow, layering and rapid_movement were nearly invisible to the
+    original six local features.
     """
     rows = []
     wallets = [n for n, d in g.nodes(data=True) if d.get("kind") == "wallet"]
+    wt = build_wallet_transfer_graph(df)
 
     for w in wallets:
         fan_in = g.in_degree(w)   # times this wallet received (was an output)
@@ -161,6 +292,10 @@ def compute_wallet_features(df: pd.DataFrame, g: nx.MultiDiGraph) -> pd.DataFram
                 "time_span_minutes": time_span_minutes,
                 "avg_amount": float(np.mean(amounts)) if amounts else 0.0,
                 "max_tx_output_fanout": max_tx_output_fanout,
+                # -- Night 2 multi-hop features --
+                "min_return_cycle_hops": min_return_cycle_hops(wt, w),
+                "linear_chain_length": linear_chain_length(wt, w),
+                "min_receive_to_forward_minutes": min_receive_to_forward_minutes(df, w),
             }
         )
 
@@ -171,7 +306,12 @@ def compute_wallet_features(df: pd.DataFrame, g: nx.MultiDiGraph) -> pd.DataFram
 # 4. AI/ML anomaly detection (Isolation Forest) + rule-based explainability
 # ---------------------------------------------------------------------------
 
-FEATURE_COLS = ["fan_in", "fan_out", "distinct_countries", "num_tx_touched", "time_span_minutes", "max_tx_output_fanout"]
+FEATURE_COLS = [
+    "fan_in", "fan_out", "distinct_countries", "num_tx_touched",
+    "time_span_minutes", "max_tx_output_fanout",
+    # Night 2 multi-hop features (see compute_wallet_features)
+    "min_return_cycle_hops", "linear_chain_length", "min_receive_to_forward_minutes",
+]
 
 
 def flag_anomalies(features: pd.DataFrame) -> pd.DataFrame:
@@ -204,6 +344,12 @@ def _explain_row(row) -> str:
         reasons.append(f"funds touched {int(row['distinct_countries'])} different countries")
     if row["time_span_minutes"] > 0 and row["time_span_minutes"] < 10 and row["num_tx_touched"] >= 3:
         reasons.append(f"{int(row['num_tx_touched'])} transactions within {row['time_span_minutes']:.1f} min (rapid layering)")
+    if row.get("min_return_cycle_hops", 0) and row["min_return_cycle_hops"] > 0:
+        reasons.append(f"funds return to this wallet after {int(row['min_return_cycle_hops'])} hops (circular flow)")
+    if row.get("linear_chain_length", 0) and row["linear_chain_length"] >= 5:
+        reasons.append(f"sits on a {int(row['linear_chain_length'])}-wallet pass-through chain (layering)")
+    if row.get("min_receive_to_forward_minutes", 1440.0) < 5.0:
+        reasons.append(f"forwarded funds {row['min_receive_to_forward_minutes']:.1f} min after receiving them (rapid movement)")
     if not reasons:
         reasons.append("statistically unusual combination of fan-in/fan-out/geo features")
     return "; ".join(reasons)
