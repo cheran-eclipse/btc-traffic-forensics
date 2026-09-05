@@ -119,10 +119,15 @@ session-scoped shared fixture is the obvious speed-up if it starts to hurt.
   just under-flags long-chain interior wallets — a single-strong-axis blind
   spot. If picked up later: change the diagnostic to measure `risk_fitted >
   threshold`, or add a rule-assist.
-- ~2 normal wallets score High on accidental length-8 pass-through chains in
-  the random-payment mesh (same class of bug as the Night 3 cycle fix, one
-  level down). Fix would be a `linear_chain_length` cap or "chain must carry a
-  monotonically decreasing amount".
+- The Isolation Forest flags ~14% of normal wallets as anomalous. None reach
+  High/Critical risk (verified Night 5: highest normal risk is ~59 = Medium),
+  so they are Medium-severity noise, not false leads -- but the raw flag rate
+  is higher than it should be. (An earlier draft of this note said ~2 normal
+  wallets "score High" on accidental length-8 chains; that was stale -- the
+  Night 3 cluster-evidence wiring changed the risk scaling and the top normal
+  wallets now have chain length 0. The fix would still be a
+  `linear_chain_length` cap or a monotonic-amount check if the flag rate is
+  tightened later.)
 - `behavioral_evidence` has a negative fitted coefficient in 3c (honest output
   of fitting; collinear with graph, and `high_velocity` is only 3 wallets).
 

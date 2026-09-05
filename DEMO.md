@@ -145,7 +145,7 @@ work.
 - `layering` recall by the raw model flag is ~0.35 — the feature is
   discriminative and the risk score catches these wallets, but the Isolation
   Forest under-flags long-chain interior wallets. Known, documented.
-- ~2 normal wallets still score high on accidental long chains in the
-  random-payment mesh.
+- The Isolation Forest flags ~14% of normal wallets; none reach High/Critical
+  risk (highest normal ~59, Medium), but the raw flag rate is higher than ideal.
 - All thresholds (risk buckets, DBSCAN eps, correlation accept threshold) are
   prototype values, not tuned against anything official.

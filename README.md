@@ -75,7 +75,7 @@ green = IPs, grey = transactions.*
 - [ ] **Real NTRO dataset** swapped in for the synthetic one
 - [ ] **GeoIP enrichment** — currently reads geo/ASN columns from the data rather than deriving them
 - [ ] **`layering` recall by the raw model flag is ~0.35** — the feature separates layering wallets cleanly and clustering + the risk score catch them, but the Isolation Forest itself under-flags long-chain interior wallets
-- [ ] ~2 normal wallets still score High on accidental long chains in the random-payment mesh
+- [ ] **False positives** — the Isolation Forest flags ~14 % of normal wallets; none reach High/Critical risk (highest normal risk ~59, i.e. Medium), so they surface as Medium-severity noise rather than false leads, but the raw model flag rate is still higher than it should be
 - [ ] **Threshold tuning** — risk buckets, DBSCAN `eps`, correlation accept threshold and the six heuristic thresholds are all prototype values, not tuned against held-out data
 - [ ] Packaging for a clean machine beyond the lock file
 
