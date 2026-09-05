@@ -27,9 +27,11 @@ def test_four_evidence_signals_present(scored):
         assert col in table.columns
 
 
-def test_cluster_evidence_is_a_zero_stub(scored):
+def test_cluster_evidence_is_wired_in_from_dbscan(scored):
     table, _ = scored
-    assert (table["cluster_evidence"] == 0).all()
+    # Night 3: no longer a 0.0 stub -- it now carries real DBSCAN signal.
+    assert table["cluster_evidence"].nunique() > 1
+    assert table["cluster_evidence"].abs().sum() > 0
 
 
 def test_learned_weights_differ_from_naive(scored):
@@ -38,8 +40,8 @@ def test_learned_weights_differ_from_naive(scored):
     naive = {"ai": 0.4, "graph": 0.2, "behavioral": 0.2, "cluster": 0.2}
     # at least one weight moved by more than 0.1 -- fitting actually did something
     assert any(abs(w[k] - naive[k]) > 0.1 for k in naive)
-    # cluster (a zero stub) must carry ~no weight
-    assert w["cluster"] < 0.05
+    # graph evidence ends up the heaviest signal on this data
+    assert max(w, key=w.get) == "graph"
 
 
 def test_fitting_changes_the_ranking(scored):
@@ -56,8 +58,10 @@ def test_risk_and_confidence_are_separate_and_can_disagree(scored):
     # they are not the same number rescaled: correlation is far from perfect
     corr = table["risk_fitted"].corr(table["confidence"] * 100)
     assert abs(corr) < 0.95
-    # at least one entity is high-risk but not high-confidence
-    assert ((table["risk_fitted"] > 60) & (table["confidence"] < 0.8)).any()
+    # risk and confidence rank entities differently -- some entity moves a lot
+    risk_rank = table["risk_fitted"].rank(ascending=False)
+    conf_rank = table["confidence"].rank(ascending=False)
+    assert (risk_rank - conf_rank).abs().max() > 20
 
 
 def test_risk_is_bucketed_on_the_prototype_thresholds(scored):

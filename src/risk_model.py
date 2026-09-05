@@ -12,7 +12,10 @@ fitting it.
     graph_evidence      structural signals: fan-in/out, tx output fan-out,
                         return-cycle hops, pass-through chain length
     behavioral_evidence velocity, geographic spread, hold-time-before-forwarding
-    cluster_evidence    stubbed at 0.0 -- clustering is Night 3
+    cluster_evidence    Night 3: mean anomaly score of the wallet's DBSCAN
+                        cluster (clustering.cluster_evidence, label-free). Pass
+                        cluster_evidence=None to compute_evidence_signals to
+                        fall back to the old 0.0 stub.
 
 3d: Risk and Confidence are two separate numbers, computed from disjoint
 evidence, reported side by side and never collapsed into one.
@@ -40,6 +43,7 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 
+import clustering
 import main as pipeline
 
 # 3c evidence-signal definitions. Sign is chosen so that larger == more
@@ -71,9 +75,12 @@ def _minmax(s: pd.Series) -> pd.Series:
     return (s - lo) / (hi - lo)
 
 
-def compute_evidence_signals(ranked: pd.DataFrame) -> pd.DataFrame:
+def compute_evidence_signals(
+    ranked: pd.DataFrame, cluster_evidence: pd.Series | None = None
+) -> pd.DataFrame:
     """One row per wallet: the four 3c evidence signals, each z-scored so
-    larger == more suspicious. cluster_evidence is a deliberate 0.0 stub."""
+    larger == more suspicious. cluster_evidence defaults to the old 0.0 stub
+    when not supplied."""
     f = ranked.set_index("wallet")
 
     ai = _zscore(f["anomaly_score"])
@@ -85,7 +92,10 @@ def compute_evidence_signals(ranked: pd.DataFrame) -> pd.DataFrame:
     beh_parts += [_zscore(-f[c]) for c in _BEHAVIOURAL_FEATURES_NEG]
     behavioral = pd.concat(beh_parts, axis=1).mean(axis=1)
 
-    cluster = pd.Series(np.zeros(len(f)), index=f.index)  # STUB: clustering is Night 3
+    if cluster_evidence is None:
+        cluster = pd.Series(np.zeros(len(f)), index=f.index)
+    else:
+        cluster = cluster_evidence.reindex(f.index).fillna(0.0)
 
     return pd.DataFrame(
         {
@@ -131,7 +141,8 @@ def score_entities(
     features = pipeline.compute_wallet_features(df, g)
     ranked = pipeline.flag_anomalies(features)
 
-    evidence = compute_evidence_signals(ranked)
+    clu_evidence = clustering.cluster_evidence(features, ranked)
+    evidence = compute_evidence_signals(ranked, cluster_evidence=clu_evidence)
     fit = fit_risk_weights(evidence, labels)
 
     # Both risk scores are a weighted sum of the same four min-max-scaled
