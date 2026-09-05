@@ -11,7 +11,6 @@ Built for **SIH 2026 · SIH26146**, sponsored by the **National Technical Resear
 **Cheran N K** — B.Tech Electronics & Communication Engineering (Final Year), Puducherry Technological University
 [github.com/cheran-eclipse](https://github.com/cheran-eclipse) · cheran.space@gmail.com
 
-Team: T Aswajith · Vivek Vardhan · Cheran N K · S K Gnanasri
 
 ## Why this exists
 
