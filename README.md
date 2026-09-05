@@ -37,7 +37,7 @@ Tested end-to-end against a synthetic sample with two deliberately planted patte
 ![entity graph](assets/entity_graph_demo.png)
 *Red = flagged wallets, blue = wallets, green = IPs, grey = transactions.*
 
-### A bug worth mentioning, not hiding
+### First generation bug worth noting
 
 The first version of the fan-out feature measured a wallet's own out-degree in the graph — which turned out to be the wrong thing. A peeling chain is a property of the *transaction* (one input splitting into many new outputs), not an edge count on the input wallet itself. Caught this by checking the planted peeling-chain wallet against the output and seeing it wasn't flagged for the right reason. Fixed as a separate `max_tx_output_fanout` feature, re-ran, confirmed. Left in the README instead of quietly fixing it, because catching your own feature's blind spot before deployment is the actual skill, not writing the feature in the first place.
 
