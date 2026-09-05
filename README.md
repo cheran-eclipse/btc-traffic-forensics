@@ -2,7 +2,7 @@
 
 **AI-powered correlation of network-layer and blockchain-layer data to surface investigative leads from Bitcoin transaction traffic.**
 
-Built for **SIH 2026 · SIH26146**, sponsored by the **National Technical Research Organisation (NTRO)** (Theme: Transportation & Logistics / Smart Automation).
+Built for **SIH 2026 · SIH26146**, sponsored by the **National Technical Research Organisation (NTRO)** (Theme: Blockchain & Cybersecurity).
 
 ---
 
