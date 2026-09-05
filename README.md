@@ -103,7 +103,19 @@ Methodology upgrades from a separate design document, built incrementally:
   python src/case_file.py --top 5          # investigative lead case files
   ```
 
-The Streamlit dashboard and the offline end-to-end test are still to come (Night 4).
+- **Command-center dashboard + offline proof** (Night 4) — `src/dashboard.py`
+  is a minimal Streamlit view (headline counts, ranked priority alerts, and the
+  full case file per selected lead beside the static entity graph).
+  `scripts/offline_selfcheck.py` runs every pipeline stage behind a socket guard
+  that raises on any outbound connection, proving the spec's offline requirement.
+
+  ```bash
+  streamlit run src/dashboard.py           # command center
+  python scripts/offline_selfcheck.py      # "ALL 10 STAGES RAN OFFLINE"
+  ```
+
+See [`DEMO.md`](DEMO.md) for the 5-minute walk-through of one flagged case from
+raw record to investigative lead.
 
 ## Setup
 
