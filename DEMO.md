@@ -59,10 +59,12 @@ python src/risk_model.py
 Point at:
 - **Learned weights** (spec 3c): `graph 0.42, ai 0.24, cluster 0.23, behavioral 0.11`
   — fitted from the labelled data by logistic regression, **not** hand-picked
-  40/20/20/20. The comparison table shows circular-flow wallets moving *up* the
-  ranking versus the naive split.
-- The top of the risk table is circular-flow wallets. Each shows **Risk** and
-  **Confidence** as separate columns.
+  40/20/20/20. In the comparison table the two normal-wallet false positives
+  drop **14 rank places** under the fitted weights versus the naive split
+  (`1PSEeV8p… 58.7 fitted vs 87.0 naive`).
+- The top of the risk table is circular-flow wallets (RISK 77–100). Each shows
+  **Risk** and **Confidence** as separate columns — e.g. a peeling-chain wallet
+  at RISK 79.3 but CONF 0.83.
 
 ## 4. Clustering — corroboration, not a second verdict
 
