@@ -1,0 +1,9 @@
+# Keep the dashboard fully offline (spec section 4).
+[browser]
+gatherUsageStats = false
+
+[global]
+showWarningOnDirectExecution = false
+
+[server]
+headless = true
