@@ -52,6 +52,16 @@ def test_min_return_cycle_hops_zero_when_no_cycle():
     assert main.min_return_cycle_hops(wt, "C") == 0
 
 
+def test_min_return_cycle_hops_ignores_long_accidental_cycles():
+    # a 9-wallet ring: a laundering ring is tight (<=7); a 9-hop return path
+    # through the general mesh is not evidence (Night 3 fix).
+    ring = list("ABCDEFGHI")
+    rows = [(i * 10, [ring[i]], [ring[(i + 1) % len(ring)]]) for i in range(len(ring))]
+    wt = main.build_wallet_transfer_graph(_df(rows))
+    assert main.min_return_cycle_hops(wt, "A") == 0        # 9 hops > default cap 7
+    assert main.min_return_cycle_hops(wt, "A", max_hops=12) == 9
+
+
 def test_linear_chain_length_counts_the_whole_chain():
     # A -> B -> C -> D -> E, each hop a single 1-in/1-out wallet
     df = _df([

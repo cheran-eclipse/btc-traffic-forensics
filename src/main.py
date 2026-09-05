@@ -163,7 +163,7 @@ def build_wallet_transfer_graph(df: pd.DataFrame) -> nx.DiGraph:
     return wt
 
 
-def min_return_cycle_hops(wt: nx.DiGraph, wallet: str, max_hops: int = 12) -> int:
+def min_return_cycle_hops(wt: nx.DiGraph, wallet: str, max_hops: int = 7) -> int:
     """Fewest wallet-hops for value leaving `wallet` to arrive back at `wallet`;
     0 if it never returns within `max_hops`.
 
@@ -171,6 +171,15 @@ def min_return_cycle_hops(wt: nx.DiGraph, wallet: str, max_hops: int = 12) -> in
     all counts of a wallet's *own* edges. A circular flow (A->B->C->A) is a
     property of a directed path several hops away, not of any single wallet's
     degree -- every wallet in the ring looks locally ordinary.
+
+    Night 3 fix: max_hops was 12, which caught accidental long cycles in the
+    normal-wallet mesh (normal wallets pay each other at random, so almost
+    everything is "on a cycle" if you look 8+ hops out). On the Night 1 data
+    the planted rings close in 4-6 hops while the shortest accidental normal
+    cycle is 8 -- so 7 is a clean cut. A laundering ring routes funds back
+    deliberately and fast; a 9-hop return path through the general mesh is not
+    evidence of anything. This was the cause of the Night 2 "normal wallet,
+    high risk" false positives.
     """
     if wallet not in wt:
         return 0
