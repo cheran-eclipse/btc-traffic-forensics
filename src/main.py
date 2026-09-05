@@ -277,7 +277,7 @@ def compute_wallet_features(df: pd.DataFrame, g: nx.MultiDiGraph) -> pd.DataFram
     Night 2: three multi-hop features were added (min_return_cycle_hops,
     linear_chain_length, min_receive_to_forward_minutes). They are new columns;
     the existing columns are unchanged. FEATURE_COLS was extended to include
-    them, so the Isolation Forest now sees an 8-dimensional feature vector
+    them, so the Isolation Forest now sees a 9-dimensional feature vector
     instead of 6 -- this is deliberate: the Night-1 diagnostic showed
     circular_flow, layering and rapid_movement were nearly invisible to the
     original six local features.
