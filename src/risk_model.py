@@ -169,6 +169,7 @@ def score_entities(
     out["risk_naive"] = np.round(risk_naive, 1)
     out["risk_bucket"] = [_bucket(r) for r in out["risk_fitted"]]
     out = out.merge(conf, on="wallet", how="left")
+    out = out.merge(ranked[["wallet", "is_flagged", "anomaly_score"]], on="wallet", how="left")
     out = out.merge(labels[["entity", "label", "anomaly_type"]],
                     left_on="wallet", right_on="entity", how="left").drop(columns=["entity"])
     out = out.sort_values("risk_fitted", ascending=False).reset_index(drop=True)
