@@ -1,0 +1,4 @@
+# Development / test dependencies only. Runtime (requirements.txt) stays lean
+# so the system can run fully offline without a test framework installed.
+-r requirements.txt
+pytest>=7.0

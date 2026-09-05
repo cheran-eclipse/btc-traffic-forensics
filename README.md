@@ -49,12 +49,42 @@ The first version of the fan-out feature measured a wallet's own out-degree in t
 - [ ] Interactive dashboard (currently a static image)
 - [ ] Validation at a larger scale — 20 rows proves the pipeline runs, not that the anomaly thresholds are right
 
+## BitGuard AI refinements — in progress
+
+Methodology upgrades from a separate design document, built incrementally:
+
+- **Labelled synthetic dataset generator** (`src/generate_dataset.py`) — plants
+  known behaviour patterns (peeling chain, high velocity, rapid movement, amount
+  splitting, layering, circular flow) and records a ground-truth label for every
+  wallet. This is what lets later work *learn* risk weights from data instead of
+  hand-picking them. It is a generator, not a detector. Committed output lives in
+  `data/synthetic_transactions.csv` / `data/synthetic_labels.csv`; regenerate with:
+
+  ```bash
+  python src/generate_dataset.py --out-dir data --seed 7
+  ```
+
+- **Correlation confidence scoring** (`src/correlation_confidence.py`) — scores
+  how confidently one network-layer observation maps to a candidate transaction
+  (`0.5·time + 0.3·port + 0.2·ambiguity`). A match in a crowded time window scores
+  lower; a weak match is returned `UNRESOLVED` rather than guessed. An accepted
+  match is an *observation*, never a claim of wallet ownership.
+
+  ```bash
+  python src/correlation_confidence.py   # prints reference cases
+  ```
+
+Not yet wired into `src/main.py`'s graph builder — that integration, learned risk
+weights, clustering, and the dashboard are still to come.
+
 ## Setup
 
 ```bash
 pip install -r requirements.txt
 python src/main.py --input data/sample_transactions.csv --top 10
 ```
+
+Run the tests with `pip install -r requirements-dev.txt && python -m pytest`.
 
 ## License
 
