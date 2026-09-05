@@ -74,8 +74,23 @@ Methodology upgrades from a separate design document, built incrementally:
   python src/correlation_confidence.py   # prints reference cases
   ```
 
-Not yet wired into `src/main.py`'s graph builder — that integration, learned risk
-weights, clustering, and the dashboard are still to come.
+  Wired into `build_graph` (Night 2): every `ip -> tx` edge now carries a
+  `confidence` and an `ACCEPTED`/`UNRESOLVED` status.
+
+- **Multi-hop features + learned risk weights** (Night 2) — `src/main.py` gained
+  three path-level features (return-cycle hops, pass-through chain length,
+  hold-time-before-forwarding) for the anomaly types local features couldn't
+  see. `src/risk_model.py` fits a logistic regression from four evidence signals
+  to the labelled data (spec 3c) and reports **Risk and Confidence as two
+  separate numbers** (spec 3d). `src/diagnostics.py` measures per-pattern recall.
+
+  ```bash
+  python src/diagnostics.py     # per-anomaly-type recall
+  python src/risk_model.py      # learned weights + risk/confidence table
+  ```
+
+Clustering, pattern heuristics, the case-file format, and the dashboard are still
+to come (Nights 3–4).
 
 ## Setup
 
