@@ -89,8 +89,21 @@ Methodology upgrades from a separate design document, built incrementally:
   python src/risk_model.py      # learned weights + risk/confidence table
   ```
 
-Clustering, pattern heuristics, the case-file format, and the dashboard are still
-to come (Nights 3–4).
+- **Clustering, pattern heuristics, case files** (Night 3) — `src/clustering.py`
+  runs DBSCAN over the same feature set and reports per-cluster purity (5
+  clusters come out 100% anomalous; the mainstream blob 0%). `src/pattern_heuristics.py`
+  emits the six laundering signals (fan-in, fan-out, rapid movement, amount
+  splitting, layering, circular flow) as named supporting evidence — never a
+  competing verdict. `src/case_file.py` assembles the investigative-lead record
+  per entity (spec 3e): risk, confidence, why-flagged, supporting TXIDs, related
+  entities, timeline, `IP → TXID → Wallet → Wallet` path.
+
+  ```bash
+  python src/clustering.py                 # cluster purity report
+  python src/case_file.py --top 5          # investigative lead case files
+  ```
+
+The Streamlit dashboard and the offline end-to-end test are still to come (Night 4).
 
 ## Setup
 
