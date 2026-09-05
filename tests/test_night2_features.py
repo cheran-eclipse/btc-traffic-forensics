@@ -81,6 +81,29 @@ def test_min_receive_to_forward_minutes_capped_when_never_forwarded():
     assert main.min_receive_to_forward_minutes(df, "B") == 1440.0
 
 
+def test_network_edges_carry_a_confidence_and_status():
+    df = _df([(0, ["A"], ["B"]), (3, ["B"], ["C"])])
+    g = main.build_graph(df)
+    net = [
+        e for _, _, e in g.edges(data=True) if e.get("kind") == "network_link"
+    ]
+    assert net
+    for e in net:
+        assert 0.0 <= e["confidence"] <= 1.0
+        assert e["correlation_status"] in {"ACCEPTED", "UNRESOLVED"}
+    # port 8333, coincident timestamps, tiny window -> should be ACCEPTED high
+    assert all(e["correlation_status"] == "ACCEPTED" for e in net)
+
+
+def test_network_edge_confidence_drops_in_a_crowded_window():
+    df_lone = _df([(0, ["A"], ["B"])])
+    df_crowd = _df([(0, ["A"], ["B"])] + [(i * 0.01, ["X%d" % i], ["Y%d" % i]) for i in range(1, 9)])
+    c_lone = [e["confidence"] for _, _, e in main.build_graph(df_lone).edges(data=True) if e.get("kind") == "network_link"][0]
+    c_crowd = [e["confidence"] for u, v, e in main.build_graph(df_crowd).edges(data=True)
+               if e.get("kind") == "network_link" and v == "tx0000"][0]
+    assert c_crowd < c_lone
+
+
 def test_features_appear_in_compute_wallet_features():
     df = _df([(0, ["A"], ["B"]), (3, ["B"], ["C"]), (6, ["C"], ["A"])])
     g = main.build_graph(df)

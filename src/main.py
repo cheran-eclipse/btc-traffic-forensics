@@ -20,6 +20,12 @@ import pandas as pd
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
+from correlation_confidence import (
+    DEFAULT_AMBIGUITY_WINDOW_S,
+    BITCOIN_P2P_PORT,
+    score_correlation,
+)
+
 
 # ---------------------------------------------------------------------------
 # 1. Ingestion
@@ -66,17 +72,57 @@ def build_graph(df: pd.DataFrame) -> nx.MultiDiGraph:
     Storing both directions lets us later compute fan-in/fan-out per wallet
     and per-IP transaction counts, and lets a link-analysis view render
     IP <-> wallet <-> IP paths for an investigator.
+
+    Night 2: every ip->tx (network_link) edge now carries a correlation
+    `confidence` (0-1) and a `correlation_status` (ACCEPTED / UNRESOLVED) from
+    correlation_confidence.score_correlation, instead of being an unweighted
+    "these were on the same row" link. The observation is the flow's timestamp
+    and its Bitcoin-side port; the candidates are every transaction within
+    +/- DEFAULT_AMBIGUITY_WINDOW_S of it, so a link that lands in a crowded
+    time window is marked less trustworthy. An ACCEPTED edge is an observation,
+    never proof that the IP owns a wallet in the transaction.
     """
     g = nx.MultiDiGraph()
+
+    # Candidate list for the correlation scorer: (txid, timestamp) for every tx.
+    # Small dataset -> a plain scan per row is fine; for bulk data this should
+    # become a time-sorted bisect over the window.
+    tx_candidates = [
+        {"txid": r["txid"], "timestamp": r["timestamp"]} for _, r in df.iterrows()
+    ]
 
     for _, row in df.iterrows():
         tx = row["txid"]
         g.add_node(tx, kind="tx", timestamp=row["timestamp"])
 
+        ports = (row.get("src_port"), row.get("dst_port"))
+        try:
+            observed_port = BITCOIN_P2P_PORT if BITCOIN_P2P_PORT in {
+                int(p) for p in ports if p is not None and str(p).strip() != ""
+            } else int(row["dst_port"])
+        except (TypeError, ValueError):
+            observed_port = row.get("dst_port")
+
+        window = [
+            c for c in tx_candidates
+            if abs((c["timestamp"] - row["timestamp"]).total_seconds())
+            <= DEFAULT_AMBIGUITY_WINDOW_S
+        ]
+        corr = score_correlation(
+            {"timestamp": row["timestamp"], "port": observed_port},
+            window,
+            target_txid=tx,
+        )
+
         for ip_col in ("src_ip", "dst_ip"):
             ip = row[ip_col]
             g.add_node(ip, kind="ip")
-            g.add_edge(ip, tx, kind="network_link", geo=row["geo_country"], asn=row["asn"])
+            g.add_edge(
+                ip, tx, kind="network_link",
+                geo=row["geo_country"], asn=row["asn"],
+                confidence=corr.confidence,
+                correlation_status=corr.status,
+            )
 
         for addr, amt in zip(row["input_addresses"], row["input_amounts"] or [None] * len(row["input_addresses"])):
             g.add_node(addr, kind="wallet")

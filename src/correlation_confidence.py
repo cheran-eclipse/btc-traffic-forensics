@@ -98,6 +98,7 @@ def score_correlation(
     time_halflife_s: float = DEFAULT_TIME_HALFLIFE_S,
     ambiguity_window_s: float = DEFAULT_AMBIGUITY_WINDOW_S,
     accept_threshold: float = DEFAULT_ACCEPT_THRESHOLD,
+    target_txid: str | None = None,
 ) -> CorrelationResult:
     """Score how confidently one network observation maps to a transaction.
 
@@ -107,6 +108,11 @@ def score_correlation(
     candidates: sequence of mappings, each with
         'txid'      -> str
         'timestamp' -> datetime
+    target_txid: if given, score *that specific* candidate rather than picking
+        the best one. The ambiguity penalty still uses the full candidate list,
+        so a correct pairing surrounded by many competitors still scores lower.
+        Used when a caller already has an asserted IP<->tx pairing and wants to
+        know how much to trust it (e.g. build_graph's network edges).
 
     Returns a CorrelationResult. An ACCEPTED result is explicitly an
     observation-level correlation, not a claim of wallet ownership.
@@ -140,11 +146,18 @@ def score_correlation(
 
     # port_score and ambiguity_penalty are identical across candidates, so the
     # best match is simply the one closest in time (highest time_score).
+    if target_txid is not None:
+        scored = [c for c in cand_list if c["txid"] == target_txid]
+        if not scored:
+            raise ValueError(f"target_txid {target_txid!r} not in candidates")
+    else:
+        scored = cand_list
+
     best_conf = -1.0
     best_txid: str | None = None
     best_time_score = 0.0
     best_dt = 0.0
-    for c in cand_list:
+    for c in scored:
         dt = _seconds_between(c["timestamp"], obs_ts)
         t_score = time_score(dt, time_halflife_s)
         conf = W_TIME * t_score + W_PORT * p_score + W_AMBIGUITY * ambiguity_penalty
