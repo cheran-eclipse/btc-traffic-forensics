@@ -1,0 +1,6 @@
+DB-IP Lite databases, release 2026-09
+Source : https://db-ip.com/db/download/ip-to-country-lite
+         https://db-ip.com/db/download/ip-to-asn-lite
+Licence: Creative Commons Attribution 4.0 International (CC BY 4.0)
+         IP Geolocation by DB-IP (https://db-ip.com)
+Fetched by scripts/setup_geoip.py

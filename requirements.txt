@@ -4,3 +4,4 @@ scikit-learn>=1.3
 networkx>=3.0
 matplotlib>=3.7
 streamlit>=1.30      # command-center dashboard (src/dashboard.py); install beforehand, runs offline
+maxminddb>=2.5       # reads the local DB-IP Lite GeoIP .mmdb files (src/geoip.py); no network

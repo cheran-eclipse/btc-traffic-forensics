@@ -4,9 +4,6 @@
 # requirements.txt stays the minimal top-level list; this is the full closure.
 # Python 3.14 on Windows 11 (also expected to work on Linux per the PS constraint).
 
-Jinja2==3.1.6
-MarkupSafe==3.0.3
-Pygments==2.21.0
 altair==6.2.2
 anyio==4.15.1
 attrs==26.1.0
@@ -23,11 +20,14 @@ httptools==0.8.0
 idna==3.19
 iniconfig==2.3.0
 itsdangerous==2.2.0
+Jinja2==3.1.6
 joblib==1.6.0
-jsonschema-specifications==2025.9.1
 jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
 kiwisolver==1.5.0
+MarkupSafe==3.0.3
 matplotlib==3.11.0
+maxminddb==3.1.1
 narwhals==2.25.0
 networkx==3.6.1
 numpy==2.4.6
@@ -38,6 +38,7 @@ pluggy==1.6.0
 protobuf==7.36.1
 pyarrow==25.0.1
 pydeck==0.9.3
+Pygments==2.21.0
 pyparsing==3.3.2
 pytest==9.1.1
 python-dateutil==2.9.0.post0
