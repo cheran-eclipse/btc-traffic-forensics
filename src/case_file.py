@@ -10,6 +10,8 @@ flagged entity:
     Related entities    -- wallets / IPs that share a transaction
     Timeline            -- the entity's transactions in time order
     Investigation path  -- IP -> TXID -> Wallet -> Wallet ...
+    Subgraph            -- a compact spec of just this lead's money path,
+                          rendered by subgraph.render (dashboard "money path")
 
 Risk and Confidence are shown as two separate numbers (spec 3d). Every reason
 is phrased as behaviour that warrants investigation -- never "identifies a
@@ -34,6 +36,7 @@ import pandas as pd
 import main as pipeline
 import pattern_heuristics as ph
 import risk_model
+import subgraph
 
 
 def _tx_time(g, tx):
@@ -140,6 +143,9 @@ def build_case_file(wallet, df, g, wt, ranked_row, risk_row) -> dict:
 
     return {
         "entity": wallet,
+        # per-lead subgraph spec (reuses g/wt + the flagged txids; renders via
+        # subgraph.render). Replaces the old full-dataset hairball.
+        "subgraph": subgraph.build_spec(g, wt, wallet, evidence_txids),
         "risk_score": float(risk_row["risk_fitted"]),
         "risk_bucket": str(risk_row["risk_bucket"]),
         "confidence_score": float(risk_row["confidence"]),
