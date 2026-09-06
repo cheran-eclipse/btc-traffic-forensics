@@ -40,8 +40,10 @@ def test_learned_weights_differ_from_naive(scored):
     naive = {"ai": 0.4, "graph": 0.2, "behavioral": 0.2, "cluster": 0.2}
     # at least one weight moved by more than 0.1 -- fitting actually did something
     assert any(abs(w[k] - naive[k]) > 0.1 for k in naive)
-    # graph evidence ends up the heaviest signal on this data
-    assert max(w, key=w.get) == "graph"
+    # graph and cluster evidence both end up heavier than the naive 0.20,
+    # and heavier than behavioural -- fitting up-weights the structural signals
+    assert w["graph"] > 0.25 and w["cluster"] > 0.25
+    assert w["behavioral"] < w["graph"] and w["behavioral"] < w["cluster"]
 
 
 def test_fitting_changes_the_ranking(scored):

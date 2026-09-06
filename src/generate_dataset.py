@@ -27,12 +27,19 @@ Outputs two CSVs:
                    output_amounts, geo_country, asn)
     <labels-out>  entity, label (normal|anomalous), anomaly_type
 
+geo_country / asn are NOT hand-assigned. Each transaction's src_ip is generated
+inside a real public IP prefix and then looked up against the bundled DB-IP
+Lite GeoIP database (src/geoip.py) -- so the geo columns reflect a genuine,
+queryable lookup, per the problem statement.
+
 The existing data/sample_transactions.csv stays as the small smoke-test file;
 this is a separate, larger, labelled dataset.
 
-Offline: standard library + numpy only. No network.
+Offline: numpy + a local GeoIP database (data/geoip/, fetched once by
+scripts/setup_geoip.py). No network at generation time.
 
 Run:
+    python scripts/setup_geoip.py            # one time, needs internet
     python src/generate_dataset.py --out-dir data --seed 7
 """
 
@@ -40,21 +47,36 @@ from __future__ import annotations
 
 import argparse
 import csv
+import ipaddress
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
+import geoip
+
 BITCOIN_P2P_PORT = 8333
 BASE_TIME = datetime(2026, 9, 1, 0, 0, 0)
 _MAX_START_OFFSET_MIN = 60 * 24 * 5  # patterns start somewhere across a 5-day window
 
-# (geo_country, asn) pairs drawn from for the network layer.
-GEO_POOL: list[tuple[str, str]] = [
-    ("IN", "AS9829"), ("NL", "AS60781"), ("DE", "AS3320"), ("US", "AS7922"),
-    ("RU", "AS12389"), ("SG", "AS9299"), ("GB", "AS5089"), ("FR", "AS3215"),
+# Real public IP prefixes for the synthetic network layer -- one well-known
+# hosting / DNS block per country, covering the same eight countries the
+# earlier hand-coded pool used. Each was verified against the 2026-09 DB-IP
+# Lite database (see tests/test_geoip.py) to resolve consistently to the
+# country shown. The generator picks a random host inside one of these, then
+# looks its geo_country / asn up for real -- it never assigns them directly.
+IP_PREFIXES: list[tuple[str, str]] = [
+    ("8.8.8.0/24", "US"),        # Google Public DNS
+    ("88.198.0.0/16", "DE"),     # Hetzner
+    ("193.0.6.0/24", "NL"),      # RIPE NCC
+    ("139.59.0.0/18", "IN"),     # DigitalOcean BLR
+    ("13.228.0.0/16", "SG"),     # AWS ap-southeast-1
+    ("18.130.0.0/16", "GB"),     # AWS eu-west-2
+    ("15.188.0.0/16", "FR"),     # AWS eu-west-3
+    ("178.154.128.0/17", "RU"),  # Yandex Cloud
 ]
+_COUNTRIES: list[str] = sorted({cc for _, cc in IP_PREFIXES})
 
 ANOMALY_TYPES: list[str] = [
     "high_velocity", "peeling_chain", "rapid_movement",
@@ -67,12 +89,16 @@ _B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 class _Generator:
     """Accumulates transactions and per-wallet ground-truth labels."""
 
-    def __init__(self, seed: int) -> None:
+    def __init__(self, seed: int, resolver: "geoip.GeoIPResolver") -> None:
         self.rng = np.random.default_rng(seed)
+        self.resolver = resolver
         self.txs: list[dict[str, Any]] = []
         self.subject_labels: dict[str, str] = {}  # wallet -> anomaly_type
         self.instances: list[dict[str, Any]] = []  # one record per planted pattern
         self._addr_n = 0
+        self._nets: list[tuple[Any, str]] = [
+            (ipaddress.ip_network(cidr), cc) for cidr, cc in IP_PREFIXES
+        ]
 
     # -- primitives --------------------------------------------------------
 
@@ -82,8 +108,15 @@ class _Generator:
         body = "".join(self.rng.choice(list(_B58), size=25))
         return f"1{body}{self._addr_n:04d}"
 
-    def ip(self) -> str:
-        return ".".join(str(int(x)) for x in self.rng.integers(1, 254, size=4))
+    def random_ip(self, country: str | None = None) -> str:
+        """A random host address inside one of the real IP_PREFIXES. If
+        `country` is given, restrict to prefixes in that country."""
+        pool = [n for n, cc in self._nets if country is None or cc == country]
+        if not pool:
+            pool = [n for n, _ in self._nets]
+        net = pool[int(self.rng.integers(0, len(pool)))]
+        host = int(self.rng.integers(1, max(net.num_addresses - 1, 2)))
+        return str(net.network_address + host)
 
     def _start_time(self) -> datetime:
         return BASE_TIME + timedelta(
@@ -97,16 +130,16 @@ class _Generator:
         outputs: list[str],
         in_amts: list[float],
         out_amts: list[float],
-        geo: tuple[str, str] | None = None,
+        country: str | None = None,
     ) -> None:
-        g, asn = geo if geo is not None else GEO_POOL[
-            int(self.rng.integers(0, len(GEO_POOL)))
-        ]
+        src_ip = self.random_ip(country)
+        dst_ip = self.random_ip()  # the peer node; its own location is unconstrained
+        geo_country, asn = self.resolver.lookup(src_ip)  # <-- real GeoIP lookup
         self.txs.append(
             {
                 "timestamp": ts,
-                "src_ip": self.ip(),
-                "dst_ip": self.ip(),
+                "src_ip": src_ip,
+                "dst_ip": dst_ip,
                 "src_port": int(self.rng.integers(49152, 65535)),
                 "dst_port": BITCOIN_P2P_PORT,
                 "txid": None,  # assigned after everything is time-sorted
@@ -114,7 +147,7 @@ class _Generator:
                 "output_addresses": list(outputs),
                 "input_amounts": [float(a) for a in in_amts],
                 "output_amounts": [float(a) for a in out_amts],
-                "geo_country": g,
+                "geo_country": geo_country,
                 "asn": asn,
             }
         )
@@ -151,6 +184,8 @@ class _Generator:
                 send = round(balance * float(self.rng.uniform(0.1, 0.4)), 8)
                 send = max(send, 0.01)
                 received = round(max(send * (1.0 - 0.01), 0.0), 8)
+                # no country hint: src_ip is drawn from a random prefix and its
+                # geo looked up -- ordinary traffic, no deliberate routing
                 self._emit(t, [w], [counterparty], [send], [received])
                 balance = max(balance - send, 0.05)
         return wallets
@@ -204,10 +239,9 @@ class _Generator:
                 t = t + timedelta(seconds=int(self.rng.integers(30, 180)))
                 sent = amount
                 amount = round(amount * 0.99, 8)
-                self._emit(
-                    t, [a], [b], [sent], [amount],
-                    geo=GEO_POOL[int(self.rng.integers(0, len(GEO_POOL)))],
-                )
+                # each hop's src_ip is a fresh random prefix -> real geo lookup;
+                # a multi-hop chain naturally lands in several countries
+                self._emit(t, [a], [b], [sent], [amount])
 
     def gen_amount_splitting(self, k: int) -> None:
         for _ in range(k):
@@ -238,10 +272,7 @@ class _Generator:
                 t = t + timedelta(minutes=int(self.rng.integers(10, 90)))
                 sent = amount
                 amount = round(amount * 0.985, 8)
-                self._emit(
-                    t, [a], [b], [sent], [amount],
-                    geo=GEO_POOL[int(self.rng.integers(0, len(GEO_POOL)))],
-                )
+                self._emit(t, [a], [b], [sent], [amount])
 
     def gen_circular_flow(self, k: int) -> None:
         for _ in range(k):
@@ -287,8 +318,13 @@ def build_dataset(
     seed: int = 7,
     n_normal: int = 45,
     instances_per_anomaly: int = 3,
+    resolver: "geoip.GeoIPResolver | None" = None,
 ) -> dict[str, Any]:
     """Generate the labelled dataset in memory (no files written).
+
+    `resolver` defaults to geoip.default_resolver() -- the bundled DB-IP Lite
+    databases. Raises geoip.GeoIPUnavailable if they are missing (run
+    scripts/setup_geoip.py once).
 
     Returns a dict with keys:
         transactions  list[dict]  -- rows ready for CSV / for src/main.py
@@ -297,7 +333,18 @@ def build_dataset(
                                      (anomaly_type, origin, members)
         summary       dict        -- counts, for printing and for tests
     """
-    gen = _Generator(seed)
+    own_resolver = resolver is None
+    if own_resolver:
+        resolver = geoip.default_resolver()
+    try:
+        return _build_dataset(seed, n_normal, instances_per_anomaly, resolver)
+    finally:
+        if own_resolver:
+            resolver.close()
+
+
+def _build_dataset(seed, n_normal, instances_per_anomaly, resolver) -> dict[str, Any]:
+    gen = _Generator(seed, resolver)
     gen.gen_normal(n_normal)
     gen.gen_high_velocity(instances_per_anomaly)
     gen.gen_peeling_chain(instances_per_anomaly)

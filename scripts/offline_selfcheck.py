@@ -95,7 +95,7 @@ def main() -> int:
         print(f"[ ok ] {name}")
         return out
 
-    ds = step("generate labelled synthetic dataset (3b)",
+    ds = step("generate labelled synthetic dataset (3b) + GeoIP enrichment",
               lambda: generate_dataset.build_dataset(seed=7))
     step("write dataset CSVs", lambda: (
         generate_dataset.write_transactions_csv(ds["transactions"], tx_csv),
