@@ -13,11 +13,17 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 PY="${PYTHON:-python}"
-EXAMPLE_WALLET="1fAJSeQYmUnwYfftUrJsW6dLxX0341"   # a planted circular-flow case
+EXAMPLE_WALLET="1WYEQq1zGSyMaF46a5hN8yQnDx0340"   # a planted circular-flow case
 
 hr() { printf '\n\033[1m======== %s ========\033[0m\n' "$1"; }
 
-hr "1/6  Generate the labelled synthetic dataset (spec 3b)"
+# GeoIP databases ship in the repo; fetch them only if a clone is missing them.
+if [ ! -f data/geoip/dbip-country-lite.mmdb ]; then
+  hr "0/6  Fetch the GeoIP database (one time, needs internet)"
+  "$PY" scripts/setup_geoip.py
+fi
+
+hr "1/6  Generate the labelled synthetic dataset (spec 3b; geo derived by real GeoIP lookup)"
 "$PY" src/generate_dataset.py --out-dir data --seed 7
 
 hr "2/6  Run the detection pipeline (graph + correlation confidence + Isolation Forest)"
